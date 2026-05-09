@@ -127,7 +127,7 @@ python bot.py
 | `/start` | Show the welcome message and bot info |
 | `/settings` | Customize format, quality, filename template, and channel posting |
 | `/queue` | View your pending download queue |
-| `/cancel` | Cancel an active or queued download |
+| `/cancel` | Cancel the currently active download |
 | `/history` | View your 10 most recent downloads |
 | `/merge` | Open merge mode for the currently active playlist |
 
