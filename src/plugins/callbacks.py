@@ -332,7 +332,8 @@ async def handle_settings_callback(client, callback, user_id, data):
         reply_markup=build_settings_keyboard(s)
     )
 
-@Client.on_message(filters.private & filters.text & ~filters.command(["start", "history", "cancel", "queue", "settings", "merge"]))
+@Client.on_message(filters.private & filters.text & ~filters.command(["start", "history", "cancel", "queue", "settings", "merge", "scan"]))
+
 async def handle_text(client: Client, message: Message):
     if not message.from_user:
         return

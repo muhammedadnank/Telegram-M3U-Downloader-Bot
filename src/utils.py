@@ -185,7 +185,8 @@ def build_merge_type_keyboard(count: int) -> InlineKeyboardMarkup:
 # ── Scan feature helpers ─────────────────────────────────
 
 def parse_tg_link(link: str) -> dict:
-    match = re.match(r"https?://t\.me/(?:c/(\d+)/|([\w_]+)/)(\d+)(?:-(\d+))?", link)
+    match = re.match(r"(?:https?://)?t\.me/(?:c/(\d+)/|([\w_]+)/)(\d+)(?:-(\d+))?", link)
+
     if not match:
         return {}
     
