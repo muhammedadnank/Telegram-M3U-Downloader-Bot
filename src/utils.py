@@ -182,3 +182,94 @@ def build_merge_type_keyboard(count: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton("🔙 Back", callback_data="merge:start")],
     ])
 
+# ── Scan feature helpers ─────────────────────────────────
+
+def parse_tg_link(link: str) -> dict:
+    match = re.match(r"https?://t\.me/(?:c/(\d+)/|([\w_]+)/)(\d+)(?:-(\d+))?", link)
+    if not match:
+        return {}
+    
+    chat_id_str, username, start_str, end_str = match.groups()
+    start = int(start_str)
+    
+    if chat_id_str:
+        chat_id = int(f"-100{chat_id_str}")
+    else:
+        chat_id = username
+        
+    return {
+        "chat_id": chat_id,
+        "msg_start": start,
+        "msg_end": int(end_str) if end_str else None,
+        "is_range": bool(end_str)
+    }
+
+def build_scan_confirm_keyboard(count: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(f"✅ Download All ({count})", callback_data="scan:all"),
+            InlineKeyboardButton("📋 Select Episodes", callback_data="scan:select"),
+        ],
+        [InlineKeyboardButton("❌ Cancel", callback_data="scan:cancel")]
+    ])
+
+def build_scan_pick_keyboard(json_messages: list) -> InlineKeyboardMarkup:
+    buttons = []
+    row = []
+    
+    emoji_nums = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+    
+    for i, m in enumerate(json_messages):
+        label = emoji_nums[i] if i < len(emoji_nums) else f"[{i+1}]"
+        # store chat_id and message_id
+        row.append(InlineKeyboardButton(label, callback_data=f"scan_pick:{m.chat.id}:{m.id}"))
+        if len(row) == 3:
+            buttons.append(row)
+            row = []
+            
+    if row:
+        buttons.append(row)
+        
+    buttons.append([InlineKeyboardButton("❌ Cancel", callback_data="scan:cancel")])
+    return InlineKeyboardMarkup(buttons)
+
+def parse_json_data(data: dict) -> tuple[dict, list]:
+    meta = {
+        "playlist": data.get("title", "Unknown Playlist"),
+        "artist": data.get("author", "Unknown"),
+        "cover_url": data.get("cover_url", ""),
+        "language": data.get("language", ""),
+        "show_type": data.get("show_type", ""),
+        "published_on": data.get("published_on", ""),
+        "age_rating": data.get("age_rating", ""),
+        "description": data.get("description", "")
+    }
+    episodes = data.get("episodes", [])
+    return meta, episodes
+
+def build_caption(meta: dict, episodes: list) -> str:
+    playlist_name = meta.get("playlist", meta.get("album", "Playlist"))
+    artist        = meta.get("artist", "Unknown")
+    
+    caption = f"**{playlist_name}**\n\n"
+    if artist and artist != "Unknown":
+        caption += f"👤 Author: {artist}\n"
+    if meta.get("language"):
+        caption += f"🌐 Language: {meta['language']}\n"
+    if meta.get("show_type"):
+        caption += f"📁 Type: {meta['show_type']}\n"
+    caption += f"🎞️ Episodes: {len(episodes)}\n"
+    if meta.get("published_on"):
+        caption += f"📅 Published: {meta['published_on'][:10]}\n"
+    if meta.get("age_rating"):
+        caption += f"🔞 Age rating: {meta['age_rating']}\n"
+    
+    if meta.get("description"):
+        desc = meta["description"].strip()
+        if len(desc) > 300:
+            desc = desc[:300] + "..."
+        quoted_desc = "\n".join(f"> __{line}__" for line in desc.split("\n") if line.strip())
+        caption += f"\n{quoted_desc}\n"
+        
+    return caption
+

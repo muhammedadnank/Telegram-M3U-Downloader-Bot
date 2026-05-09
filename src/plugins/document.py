@@ -1,12 +1,11 @@
 import os
 import tempfile
+import json
 from pyrogram import Client, filters
 from pyrogram.types import Message
 
 from database import save_user, save_session
-from utils import parse_m3u, build_episode_keyboard
-
-import json
+from utils import parse_m3u, build_episode_keyboard, parse_json_data, build_caption
 
 @Client.on_message(filters.document)
 async def handle_document(client: Client, message: Message):
@@ -26,17 +25,7 @@ async def handle_document(client: Client, message: Message):
         if filename.endswith(".json"):
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            meta = {
-                "playlist": data.get("title", "Unknown Playlist"),
-                "artist": data.get("author", "Unknown"),
-                "cover_url": data.get("cover_url", ""),
-                "language": data.get("language", ""),
-                "show_type": data.get("show_type", ""),
-                "published_on": data.get("published_on", ""),
-                "age_rating": data.get("age_rating", ""),
-                "description": data.get("description", "")
-            }
-            episodes = data.get("episodes", [])
+            meta, episodes = parse_json_data(data)
         else:
             with open(path, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
@@ -49,29 +38,8 @@ async def handle_document(client: Client, message: Message):
         return
 
     await save_session(message.from_user.id, meta, episodes)
-
-    playlist_name = meta.get("playlist", meta.get("album", "Playlist"))
-    artist        = meta.get("artist", "Unknown")
     
-    caption = f"**{playlist_name}**\n\n"
-    caption += f"👤 Author: {artist}\n"
-    if meta.get("language"):
-        caption += f"🌐 Language: {meta['language']}\n"
-    if meta.get("show_type"):
-        caption += f"📁 Type: {meta['show_type']}\n"
-    caption += f"🎞️ Episodes: {len(episodes)}\n"
-    if meta.get("published_on"):
-        caption += f"📅 Published: {meta['published_on'][:10]}\n"
-    if meta.get("age_rating"):
-        caption += f"🔞 Age rating: {meta['age_rating']}\n"
-    
-    if meta.get("description"):
-        desc = meta["description"].strip()
-        if len(desc) > 300:
-            desc = desc[:300] + "..."
-        quoted_desc = "\n".join(f"> __{line}__" for line in desc.split("\n") if line.strip())
-        caption += f"\n{quoted_desc}\n"
-        
+    caption = build_caption(meta, episodes)
     caption += "\nSelect an episode to download:"
 
     if meta.get("cover_url"):

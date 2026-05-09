@@ -10,8 +10,15 @@ API_ID       = int(_require("API_ID"))
 API_HASH     = _require("API_HASH")
 BOT_TOKEN    = _require("BOT_TOKEN")
 MONGO_URI    = _require("MONGO_URI")
-POST_CHANNEL = os.environ.get("POST_CHANNEL", "")
 
+post_chan = os.environ.get("POST_CHANNEL", "")
+if post_chan:
+    try:
+        POST_CHANNEL = int(post_chan)
+    except ValueError:
+        POST_CHANNEL = post_chan
+else:
+    POST_CHANNEL = None
 # ─────────────────────────────────────────
 # QUALITY OPTIONS
 # ─────────────────────────────────────────

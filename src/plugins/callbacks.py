@@ -31,6 +31,10 @@ async def handle_callback(client: Client, callback: CallbackQuery):
         await handle_merge_callback(client, callback, user_id, data)
         return
 
+    if data.startswith("scan:") or data.startswith("scan_pick:"):
+        await handle_scan_callback(client, callback, user_id, data)
+        return
+
     session = await get_session(user_id)
     if not session:
         await callback.answer("❌ Session expired. Send the M3U file again.", show_alert=True)
@@ -209,6 +213,80 @@ async def handle_merge_callback(client, callback, user_id, data):
         merge_selections.pop(user_id, None)
         await callback.message.edit_text("❌ Merge cancelled.")
         await callback.answer()
+
+# ─────────────────────────────────────────
+# SCAN CALLBACK HANDLER
+# ─────────────────────────────────────────
+
+async def handle_scan_callback(client, callback, user_id, data):
+    from database import get_session, get_settings
+    from engine import enqueue_download
+    from pyrogram.types import Message, Chat
+    from utils import build_episode_keyboard
+    
+    if data.startswith("scan_pick:"):
+        _, chat_id, msg_id = data.split(":")
+        chat_id = int(chat_id) if chat_id.lstrip("-").isdigit() else chat_id
+        msg_id = int(msg_id)
+        
+        await callback.message.edit_text("⏳ Fetching picked message...")
+        try:
+            msg = await client.get_messages(chat_id, msg_id)
+            from plugins.commands import process_json_message
+            await process_json_message(client, user_id, msg, callback.message)
+        except Exception as e:
+            await callback.message.edit_text(f"❌ Error fetching picked message: {e}")
+
+    elif data == "scan:all":
+        session = await get_session(user_id)
+        if not session:
+            await callback.answer("❌ Session expired. Scan again.", show_alert=True)
+            return
+        
+        episodes = session["episodes"]
+        meta = session["metadata"]
+        s = await get_settings(user_id)
+        fmt = s["format"]
+        quality = s["quality"]
+        
+        await callback.answer(f"⬇️ Queuing all {len(episodes)} episodes...")
+        
+        # We might not be able to reply if we're in a channel and the user doesn't have post permissions, 
+        # but we send the message to their DM anyway to confirm.
+        try:
+            await client.send_message(user_id, f"🚀 Queuing {len(episodes)} episodes for auto-download...")
+        except Exception:
+            pass
+            
+        dummy_msg = Message(id=0, chat=Chat(id=user_id, type="private"))
+        
+        for ep in episodes:
+            await enqueue_download(client, dummy_msg, ep, fmt, quality, user_id, meta, silent=True)
+            
+        # Update the original message to remove the confirmation keyboard
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+            
+    elif data == "scan:select":
+        session = await get_session(user_id)
+        if not session:
+            await callback.answer("❌ Session expired. Scan again.", show_alert=True)
+            return
+        
+        episodes = session["episodes"]
+        await callback.message.edit_reply_markup(
+            reply_markup=build_episode_keyboard(episodes, page=0)
+        )
+        await callback.answer()
+        
+    elif data == "scan:cancel":
+        try:
+            await callback.message.delete()
+        except Exception:
+            await callback.message.edit_text("❌ Scan cancelled.")
+        await callback.answer("❌ Scan cancelled.")
 
 # ─────────────────────────────────────────
 # SETTINGS CALLBACK HANDLER

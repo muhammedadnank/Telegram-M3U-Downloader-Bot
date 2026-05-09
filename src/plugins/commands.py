@@ -1,11 +1,20 @@
+import os
+import json
+import tempfile
 from collections import deque
+from pyrogram.errors import UserNotParticipant
 
 from pyrogram import Client, filters
 from pyrogram.types import Message
 
-from database import save_user, downloads_col, get_settings, get_session
+from database import save_user, downloads_col, get_settings, get_session, save_session, save_settings
 from state import cancel_events, queue_items, merge_selections
-from utils import build_settings_keyboard, build_merge_select_keyboard
+from config import POST_CHANNEL, QUALITY_OPTIONS
+from utils import (
+    build_settings_keyboard, build_merge_select_keyboard, 
+    parse_tg_link, build_scan_confirm_keyboard, build_scan_pick_keyboard,
+    parse_json_data, build_caption
+)
 
 # ─────────────────────────────────────────
 # COMMAND HANDLERS
@@ -90,3 +99,151 @@ async def cmd_merge(client: Client, message: Message):
         "🔀 **Merge Mode** — Select episodes to merge:",
         reply_markup=build_merge_select_keyboard(episodes, set(), page=0)
     )
+
+# ─────────────────────────────────────────
+# SCAN COMMAND
+# ─────────────────────────────────────────
+
+async def fetch_json_in_range(client: Client, chat_id: int | str, start: int, end: int) -> list[Message]:
+    json_messages = []
+    ids = list(range(start, end + 1))
+    for i in range(0, len(ids), 100):
+        batch = ids[i:i+100]
+        msgs = await client.get_messages(chat_id, batch)
+        for m in msgs:
+            if m.document and m.document.file_name and m.document.file_name.lower().endswith(".json"):
+                json_messages.append(m)
+    return json_messages
+
+@Client.on_message(filters.command("scan"))
+async def cmd_scan(client: Client, message: Message):
+    await save_user(message.from_user)
+    
+    args = message.text.split()[1:]
+    if not args:
+        await message.reply_text("❌ Please provide a Telegram channel link.\nExample: `/scan https://t.me/c/123/45`")
+        return
+        
+    link = args[0]
+    parsed_link = parse_tg_link(link)
+    
+    if not parsed_link:
+        await message.reply_text("❌ Invalid Telegram link format. Use format: t.me/c/ID/MSG or t.me/c/ID/START-END")
+        return
+        
+    chat_id = parsed_link["chat_id"]
+    msg_start = parsed_link["msg_start"]
+    msg_end = parsed_link["msg_end"]
+    is_range = parsed_link["is_range"]
+    
+    s = await get_settings(message.from_user.id)
+    fmt = s["format"]
+    qual = s["quality"]
+    
+    for arg in args[1:]:
+        arg_lower = arg.lower()
+        if arg_lower in ["auto", "mp3", "mp4"]:
+            fmt = arg_lower
+        elif arg_lower in QUALITY_OPTIONS:
+            qual = arg_lower
+            
+    if fmt != s["format"] or qual != s["quality"]:
+        await save_settings(message.from_user.id, {"format": fmt, "quality": qual})
+    
+    status = await message.reply_text("⏳ Scanning message(s)...")
+    
+    try:
+        if is_range:
+            if msg_end < msg_start:
+                await status.edit_text("❌ Invalid range: end must be greater than start")
+                return
+            if msg_end - msg_start > 500:
+                await status.edit_text("⚠️ Range too large. Scanning first 500 messages only.")
+                msg_end = msg_start + 500
+                
+            json_messages = await fetch_json_in_range(client, chat_id, msg_start, msg_end)
+            
+            if not json_messages:
+                await status.edit_text(f"❌ No JSON files found in messages {msg_start}–{msg_end}")
+                return
+                
+            if len(json_messages) > 1:
+                # Show pick UI
+                await status.edit_text(
+                    f"🔍 Found {len(json_messages)} JSON files in range {msg_start}–{msg_end}.\nSelect one to parse:",
+                    reply_markup=build_scan_pick_keyboard(json_messages)
+                )
+                return
+            else:
+                msg = json_messages[0]
+        else:
+            msg = await client.get_messages(chat_id, msg_start)
+            if not msg or not msg.document or not msg.document.file_name.lower().endswith(".json"):
+                await status.edit_text("❌ No valid `.json` document found in that message.")
+                return
+                
+    except UserNotParticipant:
+        await status.edit_text("❌ Bot needs to be added to that channel first.")
+        return
+    except Exception as e:
+        await status.edit_text(f"❌ Error fetching message: {e}")
+        return
+
+    await process_json_message(client, message.from_user.id, msg, status)
+
+async def process_json_message(client: Client, user_id: int, json_msg: Message, status: Message):
+    await status.edit_text("⏳ Downloading `.json` file...")
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = await client.download_media(json_msg.document, file_name=os.path.join(tmpdir, "uploaded_file.json"))
+        
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            meta, episodes = parse_json_data(data)
+        except Exception:
+            await status.edit_text("❌ Could not parse JSON. Is it a valid show export?")
+            return
+            
+    if not episodes:
+        await status.edit_text("❌ No valid episodes found in the JSON.")
+        return
+        
+    await save_session(user_id, meta, episodes)
+    caption = build_caption(meta, episodes)
+    
+    if POST_CHANNEL:
+        try:
+            if meta.get("cover_url"):
+                await client.send_photo(
+                    chat_id=POST_CHANNEL,
+                    photo=meta["cover_url"],
+                    caption=caption,
+                    reply_markup=build_scan_confirm_keyboard(len(episodes))
+                )
+            else:
+                await client.send_message(
+                    chat_id=POST_CHANNEL,
+                    text=caption,
+                    reply_markup=build_scan_confirm_keyboard(len(episodes))
+                )
+            await status.delete()
+        except Exception as e:
+            await status.edit_text(
+                f"⚠️ Could not post to channel: {e}\n\n{caption}", 
+                reply_markup=build_scan_confirm_keyboard(len(episodes))
+            )
+    else:
+        if meta.get("cover_url"):
+            try:
+                await client.send_photo(
+                    chat_id=user_id,
+                    photo=meta["cover_url"],
+                    caption=caption,
+                    reply_markup=build_scan_confirm_keyboard(len(episodes))
+                )
+                await status.delete()
+            except Exception:
+                await status.edit_text(caption, reply_markup=build_scan_confirm_keyboard(len(episodes)))
+        else:
+            await status.edit_text(caption, reply_markup=build_scan_confirm_keyboard(len(episodes)))
