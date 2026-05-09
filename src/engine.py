@@ -310,7 +310,7 @@ async def download_and_send(
                 artist_tag = f"{artist} ⛥ @PFMXBOT" if artist else "@PFMXBOT"
                 ffmpeg_meta_cmd.extend([
                     "-c", "copy",
-                    "-metadata", f"title={title}",
+                    "-metadata", f"title={index_prefix}{playlist_name}",
                     "-metadata", f"artist={artist_tag}",
                     "-metadata", f"author={artist_tag}",
                     "-metadata", f"album={playlist_name}",
