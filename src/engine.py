@@ -372,8 +372,9 @@ async def download_and_send(
 
             if fmt == "mp3":
                 performer_str = f"{meta.get('artist', 'Unknown')} ⛥ @PFMXBOT"
+                tg_title = f"{index_prefix}{playlist_name}" if has_metadata else title
                 sent = await client.send_audio(
-                    audio=file_path, title=title,
+                    audio=file_path, title=tg_title,
                     performer=performer_str,
                     duration=vid_duration,
                     thumb=thumb_path,
