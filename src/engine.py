@@ -285,9 +285,9 @@ async def download_and_send(
             artist = meta.get("artist", "")
             has_metadata = bool(thumb_path or artist or meta.get("playlist") or meta.get("album"))
 
+            ep_index = episode.get("index", "")
+            index_prefix = f"{ep_index} ⛥ " if ep_index != "" else ""
             if has_metadata:
-                ep_index = episode.get("index", "")
-                index_prefix = f"{ep_index} ⛥ " if ep_index != "" else ""
                 final_name = f"{index_prefix}{playlist_name} ⛥ @PFMXBOT.{ext}"
                 final_name = re.sub(r'[\\/*?:"<>|]', "", final_name)
                 tagged_file = os.path.join(tmpdir, final_name)
