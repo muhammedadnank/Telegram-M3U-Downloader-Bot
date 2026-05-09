@@ -15,6 +15,8 @@ from utils import (
     parse_tg_link, build_scan_confirm_keyboard, build_scan_pick_keyboard,
     parse_json_data, build_caption
 )
+from engine import enqueue_download
+
 
 # ─────────────────────────────────────────
 # COMMAND HANDLERS
@@ -119,13 +121,26 @@ async def fetch_json_in_range(client: Client, chat_id: int | str, start: int, en
 async def cmd_scan(client: Client, message: Message):
     await save_user(message.from_user)
     
-    args = message.text.split()[1:]
-    if not args:
-        await message.reply_text("❌ Please provide a Telegram channel link.\nExample: `/scan https://t.me/c/123/45`")
-        return
-        
-    link = args[0]
+    text = message.text or ""
+    if text.startswith("/scan"):
+        args = text.split()[1:]
+        if not args:
+            await message.reply_text("❌ Please provide a Telegram channel link.\nExample: `/scan https://t.me/c/123/45`")
+            return
+        link = args[0]
+        fmt_override = None
+        qual_override = None
+        for arg in args[1:]:
+            arg_l = arg.lower()
+            if arg_l in ["auto", "mp3", "mp4"]: fmt_override = arg_l
+            elif arg_l in QUALITY_OPTIONS: qual_override = arg_l
+    else:
+        link = text.strip()
+        fmt_override = None
+        qual_override = None
+
     parsed_link = parse_tg_link(link)
+
     
     if not parsed_link:
         await message.reply_text("❌ Invalid Telegram link format. Use format: t.me/c/ID/MSG or t.me/c/ID/START-END")
@@ -137,18 +152,12 @@ async def cmd_scan(client: Client, message: Message):
     is_range = parsed_link["is_range"]
     
     s = await get_settings(message.from_user.id)
-    fmt = s["format"]
-    qual = s["quality"]
+    fmt = fmt_override if fmt_override else s["format"]
+    qual = qual_override if qual_override else s["quality"]
     
-    for arg in args[1:]:
-        arg_lower = arg.lower()
-        if arg_lower in ["auto", "mp3", "mp4"]:
-            fmt = arg_lower
-        elif arg_lower in QUALITY_OPTIONS:
-            qual = arg_lower
-            
     if fmt != s["format"] or qual != s["quality"]:
         await save_settings(message.from_user.id, {"format": fmt, "quality": qual})
+
     
     status = await message.reply_text("⏳ Scanning message(s)...")
     
@@ -210,9 +219,20 @@ async def process_json_message(client: Client, user_id: int, json_msg: Message, 
         return
         
     await save_session(user_id, meta, episodes)
+    s = await get_settings(user_id)
+    
+    if s.get("auto_download"):
+        fmt = s["format"]
+        qual = s["quality"]
+        for ep in episodes:
+            await enqueue_download(client, status, ep, fmt, qual, user_id, meta, silent=True)
+        await status.edit_text(f"🚀 **Full Auto**: Enqueued {len(episodes)} episodes!")
+        return
+
     caption = build_caption(meta, episodes)
     
     if POST_CHANNEL:
+
         try:
             if meta.get("cover_url"):
                 await client.send_photo(

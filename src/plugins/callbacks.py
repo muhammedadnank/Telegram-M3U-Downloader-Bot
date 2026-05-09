@@ -1,4 +1,6 @@
 import asyncio
+import re
+
 from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery, Message
 
@@ -311,6 +313,11 @@ async def handle_settings_callback(client, callback, user_id, data):
         s["channel_post"] = not s.get("channel_post", False)
         await save_settings(user_id, {"channel_post": s["channel_post"]})
 
+    elif action == "auto_toggle":
+        s["auto_download"] = not s.get("auto_download", False)
+        await save_settings(user_id, {"auto_download": s["auto_download"]})
+
+
     elif action == "filename_prompt":
         awaiting_filename.add(user_id)
         await callback.answer()
@@ -348,4 +355,11 @@ async def handle_text(client: Client, message: Message):
             return
         await save_settings(user_id, {"filename_template": template})
         await message.reply_text(f"✅ Filename template saved: `{template}`")
+        return
+
+    # Auto-link detection for scanning
+    if re.match(r"(?:https?://)?t\.me/", message.text or ""):
+        from plugins.commands import cmd_scan
+        await cmd_scan(client, message)
+
 

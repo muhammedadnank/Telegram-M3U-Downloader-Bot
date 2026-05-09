@@ -38,4 +38,5 @@ DEFAULT_SETTINGS = {
     "quality":           "best",
     "channel_post":      False,
     "filename_template": "{title}",
+    "auto_download":     False,
 }

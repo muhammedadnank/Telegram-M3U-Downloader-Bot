@@ -133,7 +133,9 @@ def build_settings_keyboard(s: dict) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(f"Format: {fmt_labels.get(s['format'], s['format'])}", callback_data="set:fmt_cycle")],
         [InlineKeyboardButton(f"Quality: {qual_labels.get(s['quality'], s['quality'])}", callback_data="set:qual_cycle")],
         [InlineKeyboardButton(f"Auto-post to channel: {ch_label}", callback_data="set:channel_toggle")],
+        [InlineKeyboardButton(f"Full Auto Mode: {'✅ On' if s.get('auto_download') else '❌ Off'}", callback_data="set:auto_toggle")],
         [InlineKeyboardButton(f"📝 Filename: {s['filename_template']}", callback_data="set:filename_prompt")],
+
         [InlineKeyboardButton("✅ Done", callback_data="set:done")],
     ])
 
