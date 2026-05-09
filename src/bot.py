@@ -10,6 +10,8 @@ if __name__ == "__main__":
         plugins=dict(root="plugins"),
         workers=8,
         sleep_threshold=10,
+        ipv6=False,
     )
+
     print("🤖 M3U Downloader Bot starting with plugins...")
     app.run()

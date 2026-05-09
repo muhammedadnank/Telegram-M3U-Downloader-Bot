@@ -1,4 +1,8 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv() # Load variables from .env
+
 
 def _require(key: str) -> str:
     val = os.environ.get(key)
