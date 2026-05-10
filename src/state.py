@@ -21,3 +21,5 @@ merge_mode:       dict[int, str] = {}  # user_id -> "mp3" | "mp4" | "av"
 FMT_CYCLE  = ["auto", "mp3", "mp4"]
 QUAL_CYCLE = list(QUALITY_OPTIONS.keys())
 awaiting_filename: set[int] = set()
+
+awaiting_merge_range: set[int] = set()

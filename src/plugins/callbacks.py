@@ -6,8 +6,8 @@ from pyrogram.types import CallbackQuery, Message
 
 from database import get_session, get_settings, save_settings
 from state import (
-    cancel_events, merge_selections, active_tasks, 
-    awaiting_filename, FMT_CYCLE, QUAL_CYCLE
+    cancel_events, merge_selections, active_tasks,
+    awaiting_filename, awaiting_merge_range, FMT_CYCLE, QUAL_CYCLE
 )
 from utils import (
     format_duration, detect_format, build_episode_keyboard,
@@ -163,6 +163,14 @@ async def handle_merge_callback(client, callback, user_id, data):
         await callback.answer()
 
     # ── Merge page nav ──────────────────────────────────────
+    elif data == "msel:range":
+        awaiting_merge_range.add(user_id)
+        await callback.answer()
+        await callback.message.reply_text(
+            "✍️ Send episode index range like `396-847` (or `396,400,402`)."
+        )
+        return
+
     elif data.startswith("mpage:"):
         page = int(data.split(":")[1])
         await callback.message.edit_text(
@@ -175,7 +183,7 @@ async def handle_merge_callback(client, callback, user_id, data):
     elif data == "merge:start":
         merge_selections[user_id] = set()
         await callback.message.edit_text(
-            "🔀 **Merge Mode** — Select episodes to merge:",
+            "🔀 **Merge Mode** — Select episodes to merge:\nSend range like `396-847` for quick select.",
             reply_markup=build_merge_select_keyboard(episodes, set(), page=0)
         )
         await callback.answer()
@@ -355,6 +363,44 @@ async def handle_text(client: Client, message: Message):
             return
         await save_settings(user_id, {"filename_template": template})
         await message.reply_text(f"✅ Filename template saved: `{template}`")
+        return
+
+    if user_id in awaiting_merge_range and user_id in merge_selections:
+        text = (message.text or "").strip()
+        session = await get_session(user_id)
+        if not session:
+            awaiting_merge_range.discard(user_id)
+            return
+        total = len(session["episodes"])
+        indices = set()
+        parts = [p.strip() for p in text.split(",") if p.strip()]
+        try:
+            for part in parts or [text]:
+                if "-" in part:
+                    a,b = [x.strip() for x in part.split("-",1)]
+                    start,end = int(a), int(b)
+                    if start > end:
+                        start,end = end,start
+                    for n in range(start, end+1):
+                        if 1 <= n <= total:
+                            indices.add(n-1)
+                else:
+                    n = int(part)
+                    if 1 <= n <= total:
+                        indices.add(n-1)
+        except ValueError:
+            await message.reply_text("❌ Invalid range. Use format like `396-847` or `396,400`.")
+            return
+
+        awaiting_merge_range.discard(user_id)
+        if not indices:
+            await message.reply_text(f"❌ No valid indices found. Choose between 1 and {total}.")
+            return
+        merge_selections[user_id] = indices
+        await message.reply_text(
+            f"✅ Selected {len(indices)} episodes by index range.",
+            reply_markup=build_merge_select_keyboard(session["episodes"], indices, page=0)
+        )
         return
 
     # Auto-link detection for scanning

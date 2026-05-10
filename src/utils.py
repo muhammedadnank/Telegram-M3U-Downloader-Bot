@@ -170,6 +170,7 @@ def build_merge_select_keyboard(episodes: list, selected: set, page: int = 0) ->
     buttons.append([
         InlineKeyboardButton(f"Select All ({len(episodes)})", callback_data="msel:all"),
         InlineKeyboardButton("Clear", callback_data="msel:clear"),
+        InlineKeyboardButton("Range", callback_data="msel:range"),
     ])
     if count >= 2:
         buttons.append([InlineKeyboardButton(f"▶️ Merge {count} episodes →", callback_data="merge:type")])
