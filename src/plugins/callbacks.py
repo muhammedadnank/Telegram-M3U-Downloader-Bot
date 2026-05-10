@@ -451,6 +451,7 @@ async def handle_text(client: Client, message: Message):
                         quality=quality,
                         user_id=user_id,
                         meta=session["metadata"],
+                        silent=True,
                     )
                 await message.reply_text(
                     f"✅ Added {len(indices)} episodes from index selection."
