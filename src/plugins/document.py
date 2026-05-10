@@ -40,7 +40,7 @@ async def handle_document(client: Client, message: Message):
     await save_session(message.from_user.id, meta, episodes)
     
     caption = build_caption(meta, episodes)
-    caption += "\nSelect an episode to download:"
+    caption += "\nSelect an episode to download or send range like `396-410`:"
 
     if meta.get("cover_url"):
         try:
