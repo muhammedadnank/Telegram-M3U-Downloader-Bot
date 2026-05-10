@@ -132,8 +132,9 @@ async def download_and_send(
                 stderr=asyncio.subprocess.STDOUT,
             )
 
-            dl_progress_re = re.compile(
-                r"\[download\]\s+([\d.]+)%\s+of\s+([~]*[\d.]+\s*\S+)(?:.*at\s+([\d.]+\s*\S+/s))?(?:.*ETA\s+([\d:]+))?"
+            dl_progress_pattern = (
+                r"\[download\]\s+([\d.]+)%\s+of\s+([~]*[\d.]+\s*\S+)"
+                r"(?:.*at\s+([\d.]+\s*\S+/s))?(?:.*ETA\s+([\d:]+))?"
             )
             stderr_lines = []
             last_edit    = [0.0]
@@ -146,7 +147,7 @@ async def download_and_send(
                 async for raw_line in proc.stdout:
                     line = raw_line.decode(errors="ignore").strip()
                     stderr_lines.append(line)
-                    m = dl_progress_re.search(line)
+                    m = re.search(dl_progress_pattern, line)
                     if m:
                         dl_pct[0]   = float(m.group(1))
                         dl_size[0]  = m.group(2).strip()
