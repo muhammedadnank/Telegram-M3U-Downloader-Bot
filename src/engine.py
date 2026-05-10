@@ -285,8 +285,10 @@ async def download_and_send(
             artist = meta.get("artist", "")
             has_metadata = bool(thumb_path or artist or meta.get("playlist") or meta.get("album"))
 
+            ep_index = episode.get("index", "")
+            index_prefix = f"{ep_index} ⛥ " if ep_index != "" else ""
             if has_metadata:
-                final_name = f"{title} ⛥ {playlist_name} ⛥ @PFMXBOT.{ext}"
+                final_name = f"{index_prefix}{playlist_name} ⛥ @PFMXBOT.{ext}"
                 final_name = re.sub(r'[\\/*?:"<>|]', "", final_name)
                 tagged_file = os.path.join(tmpdir, final_name)
                 
@@ -308,7 +310,7 @@ async def download_and_send(
                 artist_tag = f"{artist} ⛥ @PFMXBOT" if artist else "@PFMXBOT"
                 ffmpeg_meta_cmd.extend([
                     "-c", "copy",
-                    "-metadata", f"title={title}",
+                    "-metadata", f"title={index_prefix}{playlist_name}",
                     "-metadata", f"artist={artist_tag}",
                     "-metadata", f"author={artist_tag}",
                     "-metadata", f"album={playlist_name}",
@@ -370,8 +372,9 @@ async def download_and_send(
 
             if fmt == "mp3":
                 performer_str = f"{meta.get('artist', 'Unknown')} ⛥ @PFMXBOT"
+                tg_title = f"{index_prefix}{playlist_name}" if has_metadata else title
                 sent = await client.send_audio(
-                    audio=file_path, title=title,
+                    audio=file_path, title=tg_title,
                     performer=performer_str,
                     duration=vid_duration,
                     thumb=thumb_path,
